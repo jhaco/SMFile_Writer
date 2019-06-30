@@ -67,7 +67,7 @@ def trim(p, base):
 def measure(x):
     measure_sec     = round(4 * 60/x.BPM, 10)                                                       #measure in seconds = 4 x seconds per beat
     measure_all     = math.ceil(x.timings[-1]/measure_sec)                                          #number of measures that fits the whole song
-    note_192        = round(measure_sec/192, 5)                                                    #time of notes in seconds
+    note_192        = round(measure_sec/192, 5)                                                     #time of notes in seconds
     #print(measure_sec)
     #print(note_192)
     #c = 0
@@ -119,13 +119,13 @@ def output_file(n, x):
 #MAIN
 for f in get_file_names("./"):
     if f.endswith(".txt"):
-        #try:
-        x = parse_txt(f)
-        measure(x)
-        output_file(f,x)
-        #except Exception:
-            #print("Conversion failed: " + f)
-            #pass
+        try:
+            x = parse_txt(f)
+            measure(x)
+            output_file(f,x)
+        except Exception:
+            print("Conversion failed: " + f)
+            pass
         #print(x.notes)
         #print(len(x.types))
         #print(len(x.timings))
