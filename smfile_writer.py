@@ -39,11 +39,15 @@ def parse_txt(n):
 
 #BPM = beats/minute -> BPS = beats/second = BPM/60
 #measure = 4 beats = 4 1/4th notes = 1
-#1/192 >  1 measure = 192 1/192nd notes
+#1/192 >  1 measure = 256 1/256nd notes
 #after calculating and approximating each measure in 192 beats use trim() to reduce to 1/X and append and then append a comma at the end
 #find notes that fit within the measure interval and calculate the trimmed measure off of that
 #if last measure, instead of comma, append a semicolon
-#4, 8, 16, 24, 32, 48, 64, 96, 192
+#4, 8, 16, 32, 64, 128, 256
+
+def reduction(trim):
+    k = trim
+    return k
 
 def trim(p, base):
     trim    = []
@@ -51,7 +55,7 @@ def trim(p, base):
     if not p:
         trim = [0,0,0,0,',']
     else:
-        trim = [0] * 192
+        trim = [0] * 256
         for x in p:
             n   = 0
             min = 10.0
@@ -61,15 +65,16 @@ def trim(p, base):
                     n = i
                     min = diff
             trim[n] = 1
+        trim = reduction(trim)
         trim.append(',')
     return trim
 
 def measure(x):
     measure_sec     = round(4 * 60/x.BPM, 10)                                                       #measure in seconds = 4 x seconds per beat
     measure_all     = math.ceil(x.timings[-1]/measure_sec)                                          #number of measures that fits the whole song
-    note_192        = round(measure_sec/192, 5)                                                     #time of notes in seconds
+    note_256        = round(measure_sec/256, 5)                                                     #time of notes in seconds
     #print(measure_sec)
-    #print(note_192)
+    #print(note_256)
     #c = 0
 
     for i in range(measure_all):
@@ -79,7 +84,7 @@ def measure(x):
                 p.append(round(j-(i*measure_sec), 5))
                 #c += 1
         #print(p)
-        x.notes.extend(trim(p, note_192))
+        x.notes.extend(trim(p, note_256))
     del x.notes[-1]
     x.notes.append(';')
     #print(c)
