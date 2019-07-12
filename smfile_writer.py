@@ -45,8 +45,32 @@ def parse_txt(n):
 #if last measure, instead of comma, append a semicolon
 #4, 8, 16, 32, 64, 128, 256
 
+#128 = every 2nd step; 64 = every 4th; 32 = 8th; 16 = 16th; 8 = 32th; 4 = 64th; 2 to power of 0, 1, 2, 3, 4, 5
+
 def reduction(trim):
-    k = trim
+    position = [] 
+    n = 0
+
+    for i in range(len(trim)):
+        if trim[i] == 1:
+            if int(((i+1)%2)) != 0:                              #if odd, keep 256
+                return trim
+            else:
+                position.append(i+1)
+
+    for pow in range(6):
+        flag = True
+        for p in position:
+            if int(p%(2**pow)) != 0:                             #if note does not fit, go next
+                flag = False
+        if flag:
+            n = pow
+
+    k = [0]*int(256/(2**n))
+    for p in position:
+        f = int(p/(2**n))-1
+        k[f] = 1
+
     return k
 
 def trim(p, base):
@@ -124,13 +148,13 @@ def output_file(n, x):
 #MAIN
 for f in get_file_names("./"):
     if f.endswith(".txt"):
-        try:
-            x = parse_txt(f)
-            measure(x)
-            output_file(f,x)
-        except Exception:
-            print("Conversion failed: " + f)
-            pass
+        #try:
+        x = parse_txt(f)
+        measure(x)
+        output_file(f,x)
+        #except Exception:
+            #print("Conversion failed: " + f)
+            #pass
         #print(x.notes)
         #print(len(x.types))
         #print(len(x.timings))
