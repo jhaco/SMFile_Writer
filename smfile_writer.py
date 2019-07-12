@@ -53,10 +53,7 @@ def reduction(trim):
 
     for i in range(len(trim)):
         if trim[i] == 1:
-            if int(((i+1)%2)) != 0:                              #if odd, keep 256
-                return trim
-            else:
-                position.append(i+1)
+            position.append(i+1)
 
     for pow in range(6):
         flag = True
