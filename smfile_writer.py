@@ -145,13 +145,13 @@ def output_file(n, x):
 #MAIN
 for f in get_file_names("./"):
     if f.endswith(".txt"):
-        #try:
-        x = parse_txt(f)
-        measure(x)
-        output_file(f,x)
-        #except Exception:
-            #print("Conversion failed: " + f)
-            #pass
+        try:
+            x = parse_txt(f)
+            measure(x)
+            output_file(f,x)
+        except Exception:
+            print("Conversion failed: " + f)
+            pass
         #print(x.notes)
         #print(len(x.types))
         #print(len(x.timings))
