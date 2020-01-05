@@ -1,33 +1,26 @@
 import math
 import os
 from os.path import isfile, join, isdir, dirname, realpath
+from collections import defaultdict
 import re
 import time
-
-def make_folder(dir):                                                       #generate input/output folders. Place song folders in input.
-    if not isdir(join(dir, "writeIn")):
-        os.makedirs(join(dir, "writeIn"))
-    if not isdir(join(dir, "writeOut")):
-        os.makedirs(join(dir, "writeOut"))
-
-def get_file_name(path):                                                    #lists all files in specified directory
-    return [f for f in os.listdir(path) if isfile(join(path, f))]
+import argparse
 
 def format_file_name(f):
     name = "".join(f.split('.')[:-1]).lower()                               #lowercase; splits by period; keeps extension
     formatted = re.sub('[^a-z0-9-_ ]', '', name)                            #ignores special characters, except - and _
     return re.sub(' ', '_', formatted)
 
-def output_file(txt_file, x, output_dir):
-    ofile = txt_file + '.sm'
+def output_file(file_name, x, output_dir):
+    ofile = file_name + '.sm'
     index = 0
 
     with open(join(output_dir, ofile), "w") as f:
-        f.write("#TITLE:" + str(x.title) + ";\n")
+        f.write("#TITLE:" + str(x['title']) + ";\n")
         f.write("#ARTIST:jhaco vs cpuguy96;\n")
-        f.write("#MUSIC:" + txt_file + ".ogg;\n")
+        f.write("#MUSIC:" + file_name + ".ogg;\n")
         f.write("#SELECTABLE:YES;\n")
-        f.write("#BPMS:0.000=" + str(x.BPM) + ";\n\n")
+        f.write("#BPMS:0.000=" + str(x['BPM']) + ";\n\n")
         f.write("//---------------dance-single - ----------------\n")
         f.write("#NOTES:\n")
         f.write("     dance-single:\n")
@@ -35,27 +28,14 @@ def output_file(txt_file, x, output_dir):
         f.write("     Hard:\n")
         f.write("     8:\n")
         f.write("     1.000,1.000,1.000,1.000,1.000:\n")
-        for n in x.notes:
+        for n in x['notes']:
             if n == 0:
                 f.write("0000\n")
             elif n == 1:
-                f.write(str(x.types[index]) + "\n")
+                f.write(str(x['types'][index]) + "\n")
                 index+=1
-            elif n == ',':
+            elif n == ',' or n == ';':
                 f.write(n + "\n")
-            elif n == ';':
-                f.write(n + "\n")
-
-
-#=================================================================================================
-
-class Step():
-    def __init__(self):
-        self.title   = "empty"
-        self.BPM     = 0.0
-        self.notes   = []
-        self.types   = []
-        self.timings = []
 
 #=================================================================================================
 
@@ -113,55 +93,69 @@ def calculate_measure(measure, timing):
     return trim
 
 def calculate_notes(x):
-    measure_sec     = round(4 * 60/x.BPM, 10)                                                       #measure in seconds = 4 x seconds per beat
-    measure_all     = math.ceil(x.timings[-1]/measure_sec)                                          #number of measures that fits the whole song
+    measure_sec     = round(4 * 60/x['BPM'], 10)                                                       #measure in seconds = 4 x seconds per beat
+    measure_all     = math.ceil(x['timings'][-1]/measure_sec)                                          #number of measures that fits the whole song
     note_256        = round(measure_sec/256, 5)                                                     #time of notes in seconds
 
     for i in range(measure_all):
         measure = []
-        for j in x.timings:
+        for j in x['timings']:
             if((i * measure_sec) <= j < ((i+1) * measure_sec)):
                 measure.append(round(j-(i*measure_sec), 5))
-        x.notes.extend(calculate_measure(measure, note_256))
-    x.notes.pop()                                                                                 #replaces last comma with semicolon
-    x.notes.append(';')
+        x['notes'].extend(calculate_measure(measure, note_256))
+    x['notes'][-1] = ';'
 
-def parse_txt(txt_file, input_dir):
-    x = Step()
+def parse_txt(txt_file):
+    step_dict = defaultdict(list)
 
-    with open(join(input_dir, txt_file), 'r', encoding='ascii', errors='ignore') as f:                                      #ignores non-ASCII text (ex. Japanese)      
+    with open(txt_file, 'r', encoding='ascii', errors='ignore') as f:                                      #ignores non-ASCII text (ex. Japanese)      
         for line in f:                                                                              #reads by line           
             if line.startswith('TITLE'):                                                            #title
-                x.title = line.rstrip('\n').lstrip('TITLE ')
+                step_dict['title'] = line.rstrip('\n').lstrip('TITLE ')
             if line.startswith('BPM'):                                                             #BPM
-                x.BPM   = float(line.rstrip('\n').lstrip('BPM '))
+                step_dict['BPM']   = float(line.rstrip('\n').lstrip('BPM '))
             if line[0].isdigit():
                 num = line.rstrip('\n').split(' ')
-                x.types.append(num[0])
-                x.timings.append(float(num[1]))
+                step_dict['types'].append(num[0])
+                step_dict['timings'].append(float(num[1]))
     
-    calculate_notes(x)
-    return x
+    calculate_notes(step_dict)
+    return step_dict
+
+def parse(input_dir, output_dir):
+    for root, dirs, files in os.walk(input_dir):
+        txt_files = [file for file in files if file.endswith('.txt')]
+    
+        for txt_file in txt_files:
+            new_file = format_file_name(txt_file)
+            try:
+                txt_data = parse_txt(join(root, txt_file))
+                # write text sm data to output dir
+                output_file(new_file, txt_data, output_dir)
+            except Exception as ex:
+                print('Write failed for %s: %r' % (txt_file, ex))
 
 #=================================================================================================
 
 if __name__ == '__main__':
-    dir = dirname(realpath(__file__))
-    make_folder(dir)
-
     start_time = time.time()
 
-    input_dir  = join(dir, 'writeIn')
-    output_dir = join(dir, 'writeOut')
+    dir = dirname(realpath(__file__))
+    writer = argparse.ArgumentParser(description='Parser')
+    writer.add_argument('--input', default='writeIn', help='Provide an input folder (default: parseIn)')
+    writer.add_argument('--output', default='writeOut', help='Provide an output folder (default: parseOut)')
 
-    for file in get_file_name(input_dir):
-        if file.endswith(".txt"):
-            try:
-                txt_data = parse_txt(file, input_dir)
-                output_file(format_file_name(file), txt_data, output_dir)
-            except Exception:
-                print("Conversion failed: " + file)
-                pass
+    args = writer.parse_args()
+    input_dir  = join(dir, args.input)
+    output_dir = join(dir, args.output)
+
+    if not isdir(input_dir):
+        print("Invalid input directory argument.")
+    else:
+        if not isdir(output_dir):
+            print("Output directory missing: " + args.output + " \nGenerated specified output folder.")
+            os.makedirs(output_dir)
+        parse(input_dir, output_dir)
 
     end_time = time.time()
 
