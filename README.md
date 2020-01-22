@@ -19,6 +19,7 @@
         
   Sorted by most recent:
 
+  - updated to match smfile_parser's multiple difficulty support
   - implemented code changes from smfile_parser
   - reorganized code for readability and added folders
   - removed some redundant code
