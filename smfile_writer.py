@@ -14,6 +14,7 @@ def format_file_name(f):
 def output_file(file_name, x, output_dir):
     ofile = file_name + '.sm'
     index = 0
+    diff = 0
 
     with open(join(output_dir, ofile), "w") as f:
         f.write("#TITLE:" + str(x['title']) + ";\n")
@@ -21,15 +22,17 @@ def output_file(file_name, x, output_dir):
         f.write("#MUSIC:" + file_name + ".ogg;\n")
         f.write("#SELECTABLE:YES;\n")
         f.write("#BPMS:0.000=" + str(x['BPM']) + ";\n\n")
-        f.write("//---------------dance-single - ----------------\n")
-        f.write("#NOTES:\n")
-        f.write("     dance-single:\n")
-        f.write("     :\n")
-        f.write("     Hard:\n")
-        f.write("     8:\n")
-        f.write("     1.000,1.000,1.000,1.000,1.000:\n")
         for n in x['notes']:
-            if n == 0:
+            if n == '-1':
+                f.write("//---------------dance-single - ----------------\n")
+                f.write("#NOTES:\n")
+                f.write("     dance-single:\n")
+                f.write("     :\n")
+                f.write("     " + str(x['difficulty'][diff]) + ":\n")
+                f.write("     8:\n")
+                f.write("     1.000,1.000,1.000,1.000,1.000:\n")
+                diff+=1
+            elif n == 0:
                 f.write("0000\n")
             elif n == 1:
                 f.write(str(x['types'][index]) + "\n")
@@ -92,34 +95,50 @@ def calculate_measure(measure, timing):
         trim.append(',')
     return trim
 
-def calculate_notes(x):
-    measure_sec     = round(4 * 60/x['BPM'], 10)                                                       #measure in seconds = 4 x seconds per beat
-    measure_all     = math.ceil(x['timings'][-1]/measure_sec)                                          #number of measures that fits the whole song
-    note_256        = round(measure_sec/256, 5)                                                     #time of notes in seconds
+def calculate_notes(timings, bpm):
+    note = []
+    if not timings:
+        return note
+    measure_sec     = round(4 * 60/bpm, 10)                                                       #measure in seconds = 4 x seconds per beat
+    measure_all     = math.ceil(timings[-1]/measure_sec)                                          #number of measures that fits the whole song
+    note_256        = round(measure_sec/256, 5)                                                    #time of notes in seconds
 
     for i in range(measure_all):
         measure = []
-        for j in x['timings']:
+        for j in timings:
             if((i * measure_sec) <= j < ((i+1) * measure_sec)):
                 measure.append(round(j-(i*measure_sec), 5))
-        x['notes'].extend(calculate_measure(measure, note_256))
-    x['notes'][-1] = ';'
+        note.extend(calculate_measure(measure, note_256))
+    note[-1] = ';'
+    return note
+    
 
 def parse_txt(txt_file):
     step_dict = defaultdict(list)
+    types = []
+    timings = []
 
     with open(txt_file, 'r', encoding='ascii', errors='ignore') as f:                                      #ignores non-ASCII text (ex. Japanese)      
         for line in f:                                                                              #reads by line           
             if line.startswith('TITLE'):                                                            #title
                 step_dict['title'] = line.rstrip('\n').lstrip('TITLE ')
-            if line.startswith('BPM'):                                                             #BPM
+            elif line.startswith('BPM'):                                                             #BPM
                 step_dict['BPM']   = float(line.rstrip('\n').lstrip('BPM '))
-            if line[0].isdigit():
+            elif line.startswith('DIFFICULTY'):
+                step_dict['difficulty'].append(line.rstrip('\n').lstrip('DIFFICULTY').lstrip(' '))
+                step_dict['notes'].append('-1')
+            elif line[0].isdigit():
                 num = line.rstrip('\n').split(' ')
-                step_dict['types'].append(num[0])
-                step_dict['timings'].append(float(num[1]))
+                types.append(num[0])
+                timings.append(float(num[1]))
+            elif line.startswith(' '):
+                step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
+                step_dict['types'].extend(types)
+                types.clear()
+                timings.clear()
+        step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
+        step_dict['types'].extend(types)
     
-    calculate_notes(step_dict)
     return step_dict
 
 def parse(input_dir, output_dir):
