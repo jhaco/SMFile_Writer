@@ -3,8 +3,8 @@
 
 #### Usage:
 
-- Place the output files into the input folder and run the script. The default input folder is writeIn.
-- Successfully converted files will be generated in the output folder. The default output folder is writeOut.
+- Place the output files into the input folder and run the script. The default input folder is `writeIn`.
+- Successfully converted files will be generated in the output folder. The default output folder is `writeOut`.
 - If different folders are used, specify them by appending `--input inputfolder` and/or `--output outputfolder`.
         Example: `python smfile_writer.py --input inputfolder --output outputfolder`
 
