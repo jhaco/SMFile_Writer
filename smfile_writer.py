@@ -118,6 +118,8 @@ def parse_txt(txt_file):
     types = []
     timings = []
 
+    flag = False
+
     with open(txt_file, 'r', encoding='ascii', errors='ignore') as f:                                      #ignores non-ASCII text (ex. Japanese)      
         for line in f:                                                                              #reads by line           
             if line.startswith('TITLE'):                                                            #title
@@ -125,17 +127,18 @@ def parse_txt(txt_file):
             elif line.startswith('BPM'):                                                             #BPM
                 step_dict['BPM']   = float(line.rstrip('\n').lstrip('BPM '))
             elif line.startswith('DIFFICULTY'):
+                if flag:
+                    step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
+                    step_dict['types'].extend(types)
+                    types.clear()
+                    timings.clear()
                 step_dict['difficulty'].append(line.rstrip('\n').lstrip('DIFFICULTY').lstrip(' '))
                 step_dict['notes'].append('-1')
+                flag = True
             elif line[0].isdigit():
                 num = line.rstrip('\n').split(' ')
                 types.append(num[0])
-                timings.append(float(num[1]))
-            elif line.startswith(' '):
-                step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
-                step_dict['types'].extend(types)
-                types.clear()
-                timings.clear()
+                timings.append(float(num[1]))   
         step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
         step_dict['types'].extend(types)
     
