@@ -1,6 +1,7 @@
 import math
 import os
 from os.path import isfile, join, isdir, dirname, realpath
+from shutil import copyfile
 from collections import defaultdict
 import re
 import time
@@ -147,15 +148,26 @@ def parse_txt(txt_file):
 def parse(input_dir, output_dir):
     for root, dirs, files in os.walk(input_dir):
         txt_files = [file for file in files if file.endswith('.txt')]
-    
+        ogg_files = [file for file in files if file.endswith('.ogg')]
+
+        format_ogg_dict = dict(zip([format_file_name(ogg) for ogg in ogg_files], range(len(ogg_files))))
+
         for txt_file in txt_files:
             new_file = format_file_name(txt_file)
             try:
                 txt_data = parse_txt(join(root, txt_file))
+                # creates new folder for successfully parsed data
+                output_folder = output_dir + "/" + new_file
+                os.makedirs(output_folder)
                 # write text sm data to output dir
-                output_file(new_file, txt_data, output_dir)
+                output_file(new_file, txt_data, output_folder)
             except Exception as ex:
                 print('Write failed for %s: %r' % (txt_file, ex))
+            try:
+                # move and rename .ogg file to output dir
+                copyfile(join(root, ogg_files[format_ogg_dict[new_file]]), join(output_folder, new_file + '.ogg'))
+            except Exception as ex:
+                print('Sound file not found for %s' % (new_file))
 
 #=================================================================================================
 
