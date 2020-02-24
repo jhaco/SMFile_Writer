@@ -18,7 +18,8 @@
   <summary>Changelog</summary>
         
   Sorted by most recent:
-
+        
+  - added auto-create folder for each successfully parsed file; allows easier drag/drop to Stepmania's songs 
   - updated to match smfile_parser's multiple difficulty support
   - implemented code changes from smfile_parser
   - reorganized code for readability and added folders
