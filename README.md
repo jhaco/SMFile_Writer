@@ -18,7 +18,9 @@
   <summary>Changelog</summary>
         
   Sorted by most recent:
-        
+  
+  - refactored code
+  - rewrote algorithms, reducing average runtime by 25% (on a data set of 200 pairs of txt/ogg files)
   - added auto-create folder for each successfully parsed file; allows easier drag/drop to Stepmania's songs 
   - updated to match smfile_parser's multiple difficulty support
   - implemented code changes from smfile_parser
