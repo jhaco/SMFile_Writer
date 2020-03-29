@@ -1,4 +1,4 @@
-from collections import defaultdict, deque
+from collections import defaultdict
 from functools import reduce
 from math import ceil, gcd
 from os import makedirs, walk
@@ -16,66 +16,65 @@ def format_file_name(f):    #formats file name to ASCII
 def output_file(file_name, step_dict, output_dir):
     ofile = file_name + '.sm'
 
-    with open(join(output_dir, ofile), 'w') as f:
-        f.write('#TITLE:%s;\n' % step_dict['title'])
-        f.write('#ARTIST:jhaco vs cpuguy96;\n')
-        f.write('#MUSIC:%s.ogg;\n' % file_name)
-        f.write('SELECTABLE:YES;\n')
-        f.write('BPMS:0.000=%s;\n\n' % str(step_dict['bpm']))
-        for difficulty in step_dict['notes'].keys():
-            f.write('//---------------dance-single - ----------------\n')
-            f.write('#NOTES:\n')
-            f.write('     dance-single:\n')
-            f.write('     :\n')
-            f.write('     %s:\n' % difficulty)
-            f.write('     8:\n')
-            f.write('     1.000,1.000,1.000,1.000,1.000:\n')
-            for note in step_dict['notes'][difficulty]:
-                f.write(note + '\n')
+    # pre-generate output data
+    title  = '#TITLE:%s;\n' % step_dict['title']
+    artist = '#ARTIST:jhaco vs cpuguy96;\n'
+    music  = '#MUSIC:%s.ogg;\n' % file_name
+    select = 'SELECTABLE:YES;\n'
+    bpm    = 'BPMS:0.000=%s;\n\n' % str(step_dict['bpm'])
+    note_data = ''
+    for difficulty in step_dict['notes'].keys():
+        note_data += '//---------------dance-single - ----------------\n'
+        note_data += '#NOTES:\n'
+        note_data += '     dance-single:\n'
+        note_data += '     :\n'
+        note_data += '     %s:\n' % difficulty
+        note_data += '     8:\n'
+        note_data += '     1.000,1.000,1.000,1.000,1.000:\n'
+        for note in step_dict['notes'][difficulty]:
+                note_data += note + '\n'
 
+    with open(join(output_dir, ofile), 'w') as f:
+        f.write(''.join((title, artist, music, select, bpm, note_data))) # calling write only once is best practice
+        
 #===================================================================================================
 
 def find_gcd(note_positions):
     x = reduce(gcd, note_positions + [256])
     return x
 
-def compress_measure(measure, note_positions):
-    # tries to fit 128, 64, 32, 16, 8 or 4 note measures; skips 256, since that is already true
+def generate_measure(notes, note_positions):
+    # tries to fit 256, 128, 64, 32, 16, 8 or 4 note measures
     note_gcd = find_gcd(note_positions)
 
-    # if fitting fails, returns measure unchanged
-    if note_gcd == 1:
-        return measure
-    elif note_gcd == 128:
+    if note_gcd == 128: # if fitting returns a 2 note measure, adjust to 4 note
         note_gcd = 64
 
-    # place notes in compressed measure
-    compressed_measure = ['0000']*int(256/note_gcd)
-    for p in note_positions:
+    # place notes in generated measure
+    generated_measure = ['0000']*int(256/note_gcd)
+    for note, p in enumerate(note_positions):
         new_p = int(p/note_gcd)-1
-        compressed_measure[new_p] = measure[p-1]
+        generated_measure[new_p] = notes[note]
 
-    return compressed_measure
+    return generated_measure
 
-def generate_measure(notes, timings, note_256):
+def notes_to_measure(notes, timings, note_256):
     if not notes or not timings: # no notes in current measure
         return ['0000','0000','0000','0000',',']
     
-    measure = ['0000'] * 256
     note_positions = []
-    for note, time in enumerate(timings):
+    for time in timings:
         note_position = 0
         min_error = 5.0 # edge case: might need to adjust for really slow songs
-        for i in range(len(measure)):
+        for i in range(256):
             error = abs(time - i*note_256)
             if error <= min_error: # narrows down note position based on timing difference
                 note_position = i
                 min_error = error
             else:
                 break # stops finding note position once found
-        measure[note_position] = notes[note]
-        note_positions.append(note_position+1)
-    measure = compress_measure(measure, note_positions)
+        note_positions.append(note_position+1) #pre-adjusts positions to be mathematically correct
+    measure = generate_measure(notes, note_positions)
     measure.append(',')
 
     return measure
@@ -104,7 +103,7 @@ def place_notes(notes_and_timings, bpm):
                 index += 1
             else:
                 break
-        placed_notes.extend(generate_measure(notes, timings, note_256))
+        placed_notes.extend(notes_to_measure(notes, timings, note_256))
 
     placed_notes[-1] = ';'
     return placed_notes
@@ -113,7 +112,7 @@ def parse_txt(txt_file):
     step_dict = defaultdict(list)
     step_dict['notes'] = defaultdict(list)
     current_difficulty = ''
-    notes_and_timings = deque()
+    notes_and_timings = []
 
     read_notes = False
 
