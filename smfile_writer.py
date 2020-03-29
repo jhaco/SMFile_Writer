@@ -1,5 +1,6 @@
 from collections import defaultdict, deque
-from math import ceil
+from functools import reduce
+from math import ceil, gcd
 from os import makedirs, walk
 from os.path import join, isdir, dirname, realpath
 from re import sub, split
@@ -34,29 +35,24 @@ def output_file(file_name, step_dict, output_dir):
 
 #===================================================================================================
 
-def compress_measure(measure, note_positions):
-    nth_power = 0
+def find_gcd(note_positions):
+    x = reduce(gcd, note_positions + [256])
+    return x
 
+def compress_measure(measure, note_positions):
     # tries to fit 128, 64, 32, 16, 8 or 4 note measures; skips 256, since that is already true
-    for power in range(1, 7):
-        can_compress = True
-        for p in note_positions:
-            if int(p%(2**power)) != 0:
-                can_compress = False
-                break
-        if can_compress:
-            nth_power = power
-        else:
-            break
-    
+    note_gcd = find_gcd(note_positions)
+
     # if fitting fails, returns measure unchanged
-    if nth_power == 0:
+    if note_gcd == 1:
         return measure
+    elif note_gcd == 128:
+        note_gcd = 64
 
     # place notes in compressed measure
-    compressed_measure = ['0000']*int(256/(2**nth_power))
+    compressed_measure = ['0000']*int(256/note_gcd)
     for p in note_positions:
-        new_p = int(p/(2**nth_power))-1
+        new_p = int(p/note_gcd)-1
         compressed_measure[new_p] = measure[p-1]
 
     return compressed_measure
@@ -93,18 +89,19 @@ def place_notes(notes_and_timings, bpm):
     total_time = float(notes_and_timings[-1].split()[1])
     total_measures = ceil(total_time/seconds)
     note_256 = round(seconds/256, 5)
+    index = 0
     
     for measure in range(total_measures):
         notes = []   # contains notes that fit current measure
         timings = [] # contains timings that fit current measure
-        while notes_and_timings: # while queue is not empty
-            note_timing = notes_and_timings[0].split()
+        while index < len(notes_and_timings):
+            note_timing = notes_and_timings[index].split()
             note = note_timing[0]
             timing = float(note_timing[1])
             if((measure * seconds) <= timing < ((measure+1) * seconds)):
                 notes.append(note)
                 timings.append(round(timing - (measure * seconds), 5))
-                notes_and_timings.popleft()
+                index += 1
             else:
                 break
         placed_notes.extend(generate_measure(notes, timings, note_256))
