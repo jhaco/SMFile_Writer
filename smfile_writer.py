@@ -1,152 +1,152 @@
-import math
-import os
-from os.path import isfile, join, isdir, dirname, realpath
-from shutil import copyfile
 from collections import defaultdict
-import re
-import time
+from functools import reduce
+from math import ceil, gcd
+from os import makedirs, walk
+from os.path import join, isdir, dirname, realpath
+from re import sub, split
+from shutil import copyfile
 import argparse
+import time
 
-def format_file_name(f):
-    name = "".join(f.split('.')[:-1]).lower()                               #lowercase; splits by period; keeps extension
-    formatted = re.sub('[^a-z0-9-_ ]', '', name)                            #ignores special characters, except - and _
-    return re.sub(' ', '_', formatted)
+def format_file_name(f):    #formats file name to ASCII
+    name = "".join(f.split('.')[:-1]).lower()   #lowercase; splits by period; removes extension
+    formatted = sub('[^a-z0-9-_ ]', '', name)    #ignores special characters, except - and _
+    return sub(' ', '_', formatted)  #replaces whitespace with _
 
-def output_file(file_name, x, output_dir):
+def output_file(file_name, step_dict, output_dir):
     ofile = file_name + '.sm'
-    index = 0
-    diff = 0
 
-    with open(join(output_dir, ofile), "w") as f:
-        f.write("#TITLE:" + str(x['title']) + ";\n")
-        f.write("#ARTIST:jhaco vs cpuguy96;\n")
-        f.write("#MUSIC:" + file_name + ".ogg;\n")
-        f.write("#SELECTABLE:YES;\n")
-        f.write("#BPMS:0.000=" + str(x['BPM']) + ";\n\n")
-        for n in x['notes']:
-            if n == '-1':
-                f.write("//---------------dance-single - ----------------\n")
-                f.write("#NOTES:\n")
-                f.write("     dance-single:\n")
-                f.write("     :\n")
-                f.write("     " + str(x['difficulty'][diff]) + ":\n")
-                f.write("     8:\n")
-                f.write("     1.000,1.000,1.000,1.000,1.000:\n")
-                diff+=1
-            elif n == 0:
-                f.write("0000\n")
-            elif n == 1:
-                f.write(str(x['types'][index]) + "\n")
-                index+=1
-            elif n == ',' or n == ';':
-                f.write(n + "\n")
+    # pre-generate output data
+    title  = '#TITLE:%s;\n' % step_dict['title']
+    artist = '#ARTIST:jhaco vs cpuguy96;\n'
+    music  = '#MUSIC:%s.ogg;\n' % file_name
+    select = 'SELECTABLE:YES;\n'
+    bpm    = 'BPMS:0.000=%s;\n\n' % str(step_dict['bpm'])
+    note_data = ''
+    for difficulty in step_dict['notes'].keys():
+        note_data += '//---------------dance-single - ----------------\n'
+        note_data += '#NOTES:\n'
+        note_data += '     dance-single:\n'
+        note_data += '     :\n'
+        note_data += '     %s:\n' % difficulty
+        note_data += '     8:\n'
+        note_data += '     1.000,1.000,1.000,1.000,1.000:\n'
+        for note in step_dict['notes'][difficulty]:
+                note_data += note + '\n'
 
-#=================================================================================================
+    with open(join(output_dir, ofile), 'w') as f:
+        f.write(''.join((title, artist, music, select, bpm, note_data))) # calling write only once is best practice
+        
+#===================================================================================================
 
-#BPM = beats/minute -> BPS = beats/second = BPM/60
-#measure = 4 beats = 4 1/4th notes = 1
-#1/192 >  1 measure = 256 1/256nd notes
-#after calculating and approximating each measure in 192 beats use trim() to reduce to 1/X and append and then append a comma at the end
-#find notes that fit within the measure interval and calculate the trimmed measure off of that
-#if last measure, instead of comma, append a semicolon
-#4, 8, 16, 32, 64, 128, 256
+def find_gcd(note_positions):
+    x = reduce(gcd, note_positions + [256])
+    return x
 
-#128 = every 2nd step; 64 = every 4th; 32 = 8th; 16 = 16th; 8 = 32th; 4 = 64th; 2 to power of 0, 1, 2, 3, 4, 5
+def generate_measure(notes, note_positions):
+    # tries to fit 256, 128, 64, 32, 16, 8 or 4 note measures
+    note_gcd = find_gcd(note_positions)
 
-def trim_measure(trim):
-    position = [] 
-    n = 0
+    if note_gcd == 128: # if fitting returns a 2 note measure, adjust to 4 note
+        note_gcd = 64
 
-    for i in range(len(trim)):
-        if trim[i] == 1:
-            position.append(i+1)
+    # place notes in generated measure
+    generated_measure = ['0000']*int(256/note_gcd)
+    for note, p in enumerate(note_positions):
+        new_p = int(p/note_gcd)-1
+        generated_measure[new_p] = notes[note]
 
-    for pow in range(6):
-        flag = True
-        for p in position:
-            if int(p%(2**pow)) != 0:                             #if note does not fit, go next
-                flag = False
-        if flag:
-            n = pow
+    return generated_measure
 
-    k = [0]*int(256/(2**n))
-    for p in position:
-        f = int(p/(2**n))-1
-        k[f] = 1
-
-    return k
-
-def calculate_measure(measure, timing):
-    trim    = []
-
-    if not measure:
-        trim = [0,0,0,0,',']
-    else:
-        trim = [0] * 256
-        for note in measure:
-            n   = 0
-            min = 10.0
-            for i in range(len(trim)):
-                diff = abs(note - i*timing)
-                if diff <= min:
-                    n = i
-                    min = diff
-            trim[n] = 1
-        trim = trim_measure(trim)
-        trim.append(',')
-    return trim
-
-def calculate_notes(timings, bpm):
-    note = []
-    if not timings:
-        return note
-    measure_sec     = round(4 * 60/bpm, 10)                                                       #measure in seconds = 4 x seconds per beat
-    measure_all     = math.ceil(timings[-1]/measure_sec)                                          #number of measures that fits the whole song
-    note_256        = round(measure_sec/256, 5)                                                    #time of notes in seconds
-
-    for i in range(measure_all):
-        measure = []
-        for j in timings:
-            if((i * measure_sec) <= j < ((i+1) * measure_sec)):
-                measure.append(round(j-(i*measure_sec), 5))
-        note.extend(calculate_measure(measure, note_256))
-    note[-1] = ';'
-    return note
+def notes_to_measure(notes, timings, note_256):
+    if not notes or not timings: # no notes in current measure
+        return ['0000','0000','0000','0000',',']
     
+    note_positions = []
+    for time in timings:
+        note_position = 0
+        min_error = 5.0 # edge case: might need to adjust for really slow songs
+        for i in range(256):
+            error = abs(time - i*note_256)
+            if error <= min_error: # narrows down note position based on timing difference
+                note_position = i
+                min_error = error
+            else:
+                break # stops finding note position once found
+        note_positions.append(note_position+1) #pre-adjusts positions to be mathematically correct
+    measure = generate_measure(notes, note_positions)
+    measure.append(',')
+
+    return measure
+
+def place_notes(notes_and_timings, bpm):
+    placed_notes = []
+    if not notes_and_timings:
+        return placed_notes
+
+    seconds  = round(4 * 60/bpm, 10) # length of measure in seconds
+    total_time = float(notes_and_timings[-1].split()[1])
+    total_measures = ceil(total_time/seconds)
+    note_256 = round(seconds/256, 5)
+    index = 0
+    
+    for measure in range(total_measures):
+        notes = []   # contains notes that fit current measure
+        timings = [] # contains timings that fit current measure
+        while index < len(notes_and_timings):
+            note_timing = notes_and_timings[index].split()
+            note = note_timing[0]
+            timing = float(note_timing[1])
+            if((measure * seconds) <= timing < ((measure+1) * seconds)):
+                notes.append(note)
+                timings.append(round(timing - (measure * seconds), 5))
+                index += 1
+            else:
+                break
+        placed_notes.extend(notes_to_measure(notes, timings, note_256))
+
+    placed_notes[-1] = ';'
+    return placed_notes
 
 def parse_txt(txt_file):
     step_dict = defaultdict(list)
-    types = []
-    timings = []
+    step_dict['notes'] = defaultdict(list)
+    current_difficulty = ''
+    notes_and_timings = []
 
-    flag = False
+    read_notes = False
 
-    with open(txt_file, 'r', encoding='ascii', errors='ignore') as f:                                      #ignores non-ASCII text (ex. Japanese)      
-        for line in f:                                                                              #reads by line           
-            if line.startswith('TITLE'):                                                            #title
-                step_dict['title'] = line.rstrip('\n').lstrip('TITLE ')
-            elif line.startswith('BPM'):                                                             #BPM
-                step_dict['BPM']   = float(line.rstrip('\n').lstrip('BPM '))
-            elif line.startswith('DIFFICULTY'):
-                if flag:
-                    step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
-                    step_dict['types'].extend(types)
-                    types.clear()
-                    timings.clear()
-                step_dict['difficulty'].append(line.rstrip('\n').lstrip('DIFFICULTY').lstrip(' '))
-                step_dict['notes'].append('-1')
-                flag = True
-            elif line[0].isdigit():
-                num = line.rstrip('\n').split(' ')
-                types.append(num[0])
-                timings.append(float(num[1]))   
-        step_dict['notes'].extend(calculate_notes(timings, step_dict['BPM']))
-        step_dict['types'].extend(types)
-    
+    with open(txt_file, encoding='ascii', errors='ignore') as f:
+        for line in f:
+            line = line.rstrip()
+            if not read_notes:
+                if line.startswith('NOTES'):
+                    read_notes = True
+                else:
+                    metadata = line.split() # splits name from values by whitespace
+                    data_name = metadata[0]
+                    data_value = ' '.join(metadata[1:])
+                    if data_name == 'TITLE':
+                        step_dict['title'] = data_value
+                    elif data_name == 'BPM':
+                        step_dict['bpm'] = float(data_value)
+            else:
+                if line.startswith('DIFFICULTY'):
+                    if notes_and_timings:
+                        notes = place_notes(notes_and_timings, step_dict['bpm'])
+                        step_dict['notes'][current_difficulty].extend(notes)
+                        notes_and_timings.clear()
+                    current_difficulty = line.split()[1]
+                else:
+                    notes_and_timings.append(line)
+        notes = place_notes(notes_and_timings, step_dict['bpm'])
+        step_dict['notes'][current_difficulty].extend(notes)
     return step_dict
 
+#===================================================================================================
+
 def parse(input_dir, output_dir):
-    for root, dirs, files in os.walk(input_dir):
+    for root, dirs, files in walk(input_dir):
         txt_files = [file for file in files if file.endswith('.txt')]
         ogg_files = [file for file in files if file.endswith('.ogg')]
 
@@ -157,8 +157,9 @@ def parse(input_dir, output_dir):
             try:
                 txt_data = parse_txt(join(root, txt_file))
                 # creates new folder for successfully parsed data
-                output_folder = output_dir + "/" + new_file
-                os.makedirs(output_folder)
+                output_folder = output_dir + '/' + new_file
+                if not isdir(output_folder):
+                    makedirs(output_folder)
                 # write text sm data to output dir
                 output_file(new_file, txt_data, output_folder)
             except Exception as ex:
@@ -175,9 +176,9 @@ if __name__ == '__main__':
     start_time = time.time()
 
     dir = dirname(realpath(__file__))
-    writer = argparse.ArgumentParser(description='Parser')
-    writer.add_argument('--input', default='writeIn', help='Provide an input folder (default: parseIn)')
-    writer.add_argument('--output', default='writeOut', help='Provide an output folder (default: parseOut)')
+    writer = argparse.ArgumentParser(description='Writer')
+    writer.add_argument('--input', default='writeIn', help='Provide an input folder (default: writeIn)')
+    writer.add_argument('--output', default='writeOut', help='Provide an output folder (default: writeOut)')
 
     args = writer.parse_args()
     input_dir  = join(dir, args.input)
@@ -188,7 +189,7 @@ if __name__ == '__main__':
     else:
         if not isdir(output_dir):
             print("Output directory missing: " + args.output + " \nGenerated specified output folder.")
-            os.makedirs(output_dir)
+            makedirs(output_dir)
         parse(input_dir, output_dir)
 
     end_time = time.time()

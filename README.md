@@ -18,7 +18,10 @@
   <summary>Changelog</summary>
         
   Sorted by most recent:
-        
+  
+  - rewrote the output function to use write to file only once, reducing avg. runtime by 50% (200 sets: 30s to 17s)
+  - refactored code
+  - rewrote algorithms, reducing average runtime by 25% (on a data set of 200 pairs of txt/ogg files: 40s to 30s)
   - added auto-create folder for each successfully parsed file; allows easier drag/drop to Stepmania's songs 
   - updated to match smfile_parser's multiple difficulty support
   - implemented code changes from smfile_parser
